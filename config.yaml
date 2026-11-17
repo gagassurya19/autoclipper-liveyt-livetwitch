@@ -1,0 +1,81 @@
+# AUTO CUAN GTA VI — main config
+# Secrets (API keys, bot token) go in .env, not here.
+
+channel_handle: "@clippingaround"
+data_dir: ./data            # segments, raw windows, renders, sqlite db
+buffer_minutes: 12          # how much recent stream to keep on disk per streamer
+segment_seconds: 6          # recorder chunk length (copy-only, no re-encode)
+
+recorder:
+  backend: streamlink       # streamlink | yt-dlp
+  # If YouTube says "Sign in to confirm you're not a bot", set your browser here
+  # (you must be logged in to YouTube in it). This switches YouTube recording to yt-dlp.
+  cookies_from_browser: null   # chrome | safari | firefox | brave | edge
+
+output:
+  width: 1080
+  height: 1920
+  fps: 60                   # 30 is lighter on the Steam Deck CPU
+  encoder: libx264          # libx264 | h264_vaapi (Steam Deck GPU) | h264_videotoolbox (Mac)
+  vaapi_device: /dev/dri/renderD128
+  crf: 20                   # libx264 quality (lower = better)
+  preset: veryfast
+  maxrate: 10M              # keeps a 35 s clip around 40 MB
+  audio_bitrate: 160k
+  accent: "#FFD84D"
+
+detector:
+  chat_window_s: 10         # messages counted over this window
+  baseline_minutes: 5       # "normal" chat speed = median over this period
+  warmup_s: 90              # no triggers until this much history exists
+  chat_ratio_trigger: 2.5   # trigger when chat is 2.5x faster than normal...
+  min_msgs_in_window: 8     # ...and has at least this many msgs in the window
+  audio_z_trigger: 3.0      # loud spike (robust z-score) + chat ratio >= 1.3
+  audio_only_z: 4         # trigger on audio alone (when chat is dead / unavailable)
+  chat_offset_s: 6          # chat reacts this many seconds after the moment
+  chat_lag_s:               # chat reaches us this late (measured: YouTube 16–21 s)
+    youtube: 22
+    twitch: 3
+  cooldown_s: 90            # min gap between two clips of the same streamer
+  pre_roll_s: 40            # raw window = peak - 40 s ...
+  post_roll_s: 20           # ... to peak + 20 s
+
+clip:
+  min_s: 15
+  max_s: 60
+  default_before_peak_s: 22 # fallback cut when no AI copywriter is configured
+  default_after_peak_s: 6
+  hook_s: 2.0
+  outro_s: 1.5
+  min_score: 0              # send everything to Telegram while testing; raise to 70 later
+
+manual:
+  telegram_commands: true   # send /clip to the bot to clip what you just saw
+  default_ago_s: 10         # /clip = the moment was this many seconds before your message
+                            # (your reaction + typing time; use /clip 30 for older moments)
+
+ai:
+  transcribe_model: whisper-large-v3-turbo   # Groq
+  copy_model: gemini-flash-latest            # Gemini (judge + hook + title + hashtags)
+  copy_fallback_models: [gemini-flash-lite-latest, gemini-2.5-flash]   # tried if the main one is overloaded (503)
+
+telegram:
+  api_base: https://api.telegram.org         # or your local Bot API server (2 GB limit)
+  max_upload_mb: 49                          # cloud Bot API hard limit is 50 MB
+  send_as: video                             # video | document
+
+workers:
+  editors: 2
+
+# Streams to clip: just paste URLs. Channel name, @handle, platform and language are
+# detected automatically. Works with a live video URL, a channel's /live URL, or a Twitch channel.
+# You can also pass URLs on the command line instead:  python -m autocuan run --url <url> --url <url>
+default_language: auto      # auto (Whisper detects id/en per clip) | id | en
+streams:
+  - https://www.youtube.com/watch?v=MaUcNWLyStg
+  # Optional per-stream settings — use the dict form:
+  # - url: https://www.youtube.com/@windahbasudara/live
+  #   language: id               # skip auto-detect
+  #   facecam: {x: 0.74, y: 0.02, w: 0.24, h: 0.27}   # measure with `snap`
+  #   crop_center_x: 0.5         # where to centre the 9:16 gameplay crop
+  # - https://www.twitch.tv/kaicenat
